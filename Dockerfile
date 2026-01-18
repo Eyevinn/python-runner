@@ -8,4 +8,4 @@ RUN chmod +x ./*.sh
 VOLUME /usercontent
 ENV PORT=8080
 ENTRYPOINT [ "/runner/docker-entrypoint.sh" ]
-CMD [ "python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080" ]
+CMD [ "auto" ]

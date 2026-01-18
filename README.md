@@ -58,15 +58,22 @@ The runner automatically detects and installs dependencies from:
 
 If a `setup.sh` script is present in the repository root, it will be executed after dependency installation.
 
-## Default Command
+## Automatic Framework Detection
 
-By default, the container runs:
+The runner automatically detects your application type and starts it with the appropriate server:
 
-```bash
-python -m uvicorn main:app --host 0.0.0.0 --port 8080
-```
+| Framework | Detection | Server Used |
+|-----------|-----------|-------------|
+| **FastAPI/Starlette** | `fastapi` or `starlette` in dependencies | `uvicorn` |
+| **Flask** | `flask` in dependencies | `gunicorn` (if available) or `flask run` |
+| **Gunicorn** | `gunicorn` in dependencies + config file | `gunicorn` with config |
+| **Plain Python** | `main.py` or `app.py` present | `python main.py` |
 
-This expects a FastAPI/Starlette application with an `app` object in `main.py`. You can override this by passing a custom command:
+The runner looks for the app object in common entry point files (`main.py`, `app.py`, `application.py`, `server.py`, `api.py`) and detects common patterns like `app = FastAPI()` or `app = Flask(__name__)`.
+
+## Custom Command
+
+You can override the auto-detection by passing a custom command:
 
 ```bash
 docker run --rm \
@@ -76,7 +83,7 @@ docker run --rm \
   python app.py
 ```
 
-Or for Flask applications:
+Or for a specific Flask configuration:
 
 ```bash
 docker run --rm \
@@ -86,7 +93,7 @@ docker run --rm \
   flask run --host=0.0.0.0 --port=8080
 ```
 
-Or for Gunicorn:
+Or for Gunicorn with specific options:
 
 ```bash
 docker run --rm \
