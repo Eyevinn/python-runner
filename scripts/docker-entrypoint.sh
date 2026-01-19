@@ -13,21 +13,40 @@ URL="${SOURCE_URL:-$GITHUB_URL}"
 # Function to clone from GitHub
 clone_from_github() {
   local url="$1"
+  local branch=""
+  local repo_path=""
 
-  # Extract the repository path from the URL
-  # Supports: https://github.com/org/repo or https://github.com/org/repo/
-  local repo_path=$(echo "$url" | sed -E 's|https://github.com/||' | sed 's|/$||')
+  # Check if URL contains a branch reference (e.g., /tree/branch_name)
+  if [[ "$url" == *"/tree/"* ]]; then
+    # Extract branch name (everything after /tree/)
+    branch=$(echo "$url" | sed -E 's|.*/tree/||')
+    # Extract repo path (everything between github.com/ and /tree/)
+    repo_path=$(echo "$url" | sed -E 's|https://github.com/||' | sed -E 's|/tree/.*||')
+  else
+    # No branch specified, extract the repository path
+    # Supports: https://github.com/org/repo or https://github.com/org/repo/
+    repo_path=$(echo "$url" | sed -E 's|https://github.com/||' | sed 's|/$||')
+  fi
 
-  echo "Cloning repository: $repo_path"
+  if [ -n "$branch" ]; then
+    echo "Cloning repository: $repo_path (branch: $branch)"
+  else
+    echo "Cloning repository: $repo_path"
+  fi
 
   # Clear the usercontent directory
   rm -rf /usercontent/*
 
-  # Clone the repository
+  # Clone the repository (with optional branch)
+  local clone_opts=""
+  if [ -n "$branch" ]; then
+    clone_opts="-b $branch"
+  fi
+
   if [ -n "$GITHUB_TOKEN" ]; then
-    git clone "https://${GITHUB_TOKEN}@github.com/${repo_path}.git" /usercontent
+    git clone $clone_opts "https://${GITHUB_TOKEN}@github.com/${repo_path}.git" /usercontent
   else
-    git clone "https://github.com/${repo_path}.git" /usercontent
+    git clone $clone_opts "https://github.com/${repo_path}.git" /usercontent
   fi
 }
 

@@ -1,13 +1,19 @@
-ARG PYTHON_IMAGE=python:3.12-alpine
+ARG PYTHON_IMAGE=python:3.12-slim
 
 FROM ${PYTHON_IMAGE}
-RUN apk add --no-cache bash git aws-cli unzip
-RUN apk add --no-cache \
-    build-base \
-    pkgconfig \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    git \
+    awscli \
+    unzip \
+    build-essential \
+    pkg-config \
     python3-dev \
-    freetype-dev \
-    libpng-dev
+    libfreetype6-dev \
+    libpng-dev \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip install gradio
+
 WORKDIR /runner
 COPY ./scripts ./
 RUN chmod +x ./*.sh
