@@ -35,7 +35,7 @@ clone_from_github() {
   fi
 
   # Clear the usercontent directory
-  rm -rf /usercontent/*
+  rm -rf /usercontent/* /usercontent/.[!.]*
 
   # Clone the repository (with optional branch)
   local clone_opts=""
