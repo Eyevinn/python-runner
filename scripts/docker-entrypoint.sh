@@ -10,28 +10,31 @@ fi
 # Use SOURCE_URL if set, otherwise use GITHUB_URL
 URL="${SOURCE_URL:-$GITHUB_URL}"
 
-# Function to clone from GitHub
-clone_from_github() {
+# Function to clone from a generic HTTPS git host (GitHub, GitLab, Gitea, etc.)
+clone_from_git() {
   local url="$1"
   local branch=""
   local repo_path=""
+
+  # Extract hostname dynamically from URL
+  local git_host=$(echo "$url" | sed -E 's|https?://([^/]+).*|\1|')
 
   # Check if URL contains a branch reference (e.g., /tree/branch_name)
   if [[ "$url" == *"/tree/"* ]]; then
     # Extract branch name (everything after /tree/)
     branch=$(echo "$url" | sed -E 's|.*/tree/||')
-    # Extract repo path (everything between github.com/ and /tree/)
-    repo_path=$(echo "$url" | sed -E 's|https://github.com/||' | sed -E 's|/tree/.*||')
+    # Extract repo path (everything between host/ and /tree/)
+    repo_path=$(echo "$url" | sed -E "s|https?://[^/]+/||" | sed -E 's|/tree/.*||')
   else
     # No branch specified, extract the repository path
-    # Supports: https://github.com/org/repo or https://github.com/org/repo/
-    repo_path=$(echo "$url" | sed -E 's|https://github.com/||' | sed 's|/$||')
+    # Supports: https://host/org/repo or https://host/org/repo/
+    repo_path=$(echo "$url" | sed -E "s|https?://[^/]+/||" | sed 's|/$||')
   fi
 
   if [ -n "$branch" ]; then
-    echo "Cloning repository: $repo_path (branch: $branch)"
+    echo "Cloning repository: $repo_path (branch: $branch) from $git_host"
   else
-    echo "Cloning repository: $repo_path"
+    echo "Cloning repository: $repo_path from $git_host"
   fi
 
   # Clear the usercontent directory
@@ -43,10 +46,13 @@ clone_from_github() {
     clone_opts="-b $branch"
   fi
 
-  if [ -n "$GITHUB_TOKEN" ]; then
-    git clone $clone_opts "https://${GITHUB_TOKEN}@github.com/${repo_path}.git" /usercontent
+  # Support GIT_TOKEN with GITHUB_TOKEN as fallback for backward compatibility
+  local git_token="${GIT_TOKEN:-$GITHUB_TOKEN}"
+
+  if [ -n "$git_token" ]; then
+    git clone $clone_opts "https://${git_token}@${git_host}/${repo_path}.git" /usercontent
   else
-    git clone $clone_opts "https://github.com/${repo_path}.git" /usercontent
+    git clone $clone_opts "https://${git_host}/${repo_path}.git" /usercontent
   fi
 }
 
@@ -83,10 +89,10 @@ download_from_s3() {
 # Determine source type and fetch code
 if [[ "$URL" == s3://* ]]; then
   download_from_s3 "$URL"
-elif [[ "$URL" == *"github.com"* ]]; then
-  clone_from_github "$URL"
+elif [[ "$URL" == https://* ]]; then
+  clone_from_git "$URL"
 else
-  echo "Error: Unsupported URL scheme. Use GitHub URL or S3 URL (s3://...)"
+  echo "Error: Unsupported URL scheme. Use an HTTPS git URL or S3 URL (s3://...)"
   exit 1
 fi
 
