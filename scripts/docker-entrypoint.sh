@@ -50,7 +50,7 @@ clone_from_git() {
   local git_token="${GIT_TOKEN:-$GITHUB_TOKEN}"
 
   if [ -n "$git_token" ]; then
-    git clone $clone_opts "https://${git_token}@${git_host}/${repo_path}.git" /usercontent
+    git clone $clone_opts "https://token:${git_token}@${git_host}/${repo_path}.git" /usercontent
   else
     git clone $clone_opts "https://${git_host}/${repo_path}.git" /usercontent
   fi
