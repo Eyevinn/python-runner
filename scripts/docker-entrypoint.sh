@@ -56,6 +56,37 @@ clone_from_git() {
   fi
 }
 
+# Write commit metadata to a well-known file for platform visibility
+write_commit_info() {
+  local repo_dir="$1"
+  if ! git -C "$repo_dir" rev-parse HEAD >/dev/null 2>&1; then return 0; fi
+  local sha shortSha msg author date
+  sha=$(git -C "$repo_dir" rev-parse HEAD 2>/dev/null) || return 0
+  shortSha=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null) || return 0
+  msg=$(git -C "$repo_dir" log -1 --format='%s' 2>/dev/null | sed 's/\\/\\\\/g; s/"/\\"/g') || return 0
+  author=$(git -C "$repo_dir" log -1 --format='%an' 2>/dev/null | sed 's/\\/\\\\/g; s/"/\\"/g') || return 0
+  date=$(git -C "$repo_dir" log -1 --format='%aI' 2>/dev/null) || return 0
+
+  local recent="["
+  local first=true
+  while read -r c_sha; do
+    [ -z "$c_sha" ] && continue
+    local c_short c_msg c_author c_date
+    c_short=$(git -C "$repo_dir" rev-parse --short "$c_sha" 2>/dev/null)
+    c_msg=$(git -C "$repo_dir" log -1 --format='%s' "$c_sha" 2>/dev/null | sed 's/\\/\\\\/g; s/"/\\"/g')
+    c_author=$(git -C "$repo_dir" log -1 --format='%an' "$c_sha" 2>/dev/null | sed 's/\\/\\\\/g; s/"/\\"/g')
+    c_date=$(git -C "$repo_dir" log -1 --format='%aI' "$c_sha" 2>/dev/null)
+    if [ "$first" = true ]; then first=false; else recent="$recent,"; fi
+    recent="$recent{\"sha\":\"$c_sha\",\"shortSha\":\"$c_short\",\"message\":\"$c_msg\",\"author\":\"$c_author\",\"date\":\"$c_date\"}"
+  done <<< "$(git -C "$repo_dir" log -5 --format='%H' 2>/dev/null)"
+  recent="$recent]"
+
+  printf '{"sha":"%s","shortSha":"%s","message":"%s","author":"%s","date":"%s","recentCommits":%s}\n' \
+    "$sha" "$shortSha" "$msg" "$author" "$date" "$recent" \
+    > "$repo_dir/.commit-info.json" 2>/dev/null || true
+  echo "Commit info: $shortSha - $msg"
+}
+
 # Function to download from S3
 download_from_s3() {
   local url="$1"
@@ -91,6 +122,7 @@ if [[ "$URL" == s3://* ]]; then
   download_from_s3 "$URL"
 elif [[ "$URL" == https://* ]]; then
   clone_from_git "$URL"
+  write_commit_info /usercontent
 else
   echo "Error: Unsupported URL scheme. Use an HTTPS git URL or S3 URL (s3://...)"
   exit 1
