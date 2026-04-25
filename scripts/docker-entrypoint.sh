@@ -54,6 +54,11 @@ clone_from_git() {
   else
     git clone $clone_opts "https://${git_host}/${repo_path}.git" /usercontent
   fi
+
+  # Scrub PAT from origin remote — token must not persist to .git/config
+  if [ -n "$git_token" ]; then
+    git -C /usercontent remote set-url origin "https://${git_host}/${repo_path}.git"
+  fi
 }
 
 # Write commit metadata to a well-known file for platform visibility
