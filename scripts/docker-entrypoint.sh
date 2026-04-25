@@ -16,8 +16,12 @@ clone_from_git() {
   local branch=""
   local repo_path=""
 
-  # Extract hostname dynamically from URL
+  # Extract hostname dynamically from URL (may include user:pass@ for Gitea-style URLs)
   local git_host=$(echo "$url" | sed -E 's|https?://([^/]+).*|\1|')
+  # Variant with any embedded credentials stripped — used for log lines and the
+  # persisted remote URL so that PATs never leak into pod logs or .git/config.
+  # When SOURCE_URL has no credentials, this is identical to git_host.
+  local git_host_public=$(echo "$git_host" | sed -E 's|^[^@]+@||')
 
   # Check if URL contains a branch reference (e.g., /tree/branch_name)
   if [[ "$url" == *"/tree/"* ]]; then
@@ -32,9 +36,9 @@ clone_from_git() {
   fi
 
   if [ -n "$branch" ]; then
-    echo "Cloning repository: $repo_path (branch: $branch) from $git_host"
+    echo "Cloning repository: $repo_path (branch: $branch) from $git_host_public"
   else
-    echo "Cloning repository: $repo_path from $git_host"
+    echo "Cloning repository: $repo_path from $git_host_public"
   fi
 
   # Clear the usercontent directory
@@ -50,15 +54,20 @@ clone_from_git() {
   local git_token="${GIT_TOKEN:-$GITHUB_TOKEN}"
 
   if [ -n "$git_token" ]; then
-    git clone $clone_opts "https://token:${git_token}@${git_host}/${repo_path}.git" /usercontent
-  else
+    echo "cloning https://***@${git_host_public}/${repo_path}.git"
+    git clone $clone_opts "https://token:${git_token}@${git_host_public}/${repo_path}.git" /usercontent
+  elif [ "$git_host" != "$git_host_public" ]; then
+    # SOURCE_URL embeds credentials (e.g. Gitea: https://user:pass@host/...).
+    # Clone with them in place but keep them out of the log line.
+    echo "cloning https://***@${git_host_public}/${repo_path}.git"
     git clone $clone_opts "https://${git_host}/${repo_path}.git" /usercontent
+  else
+    echo "cloning https://${git_host_public}/${repo_path}.git"
+    git clone $clone_opts "https://${git_host_public}/${repo_path}.git" /usercontent
   fi
 
   # Scrub PAT from origin remote — token must not persist to .git/config
-  if [ -n "$git_token" ]; then
-    git -C /usercontent remote set-url origin "https://${git_host}/${repo_path}.git"
-  fi
+  git -C /usercontent remote set-url origin "https://${git_host_public}/${repo_path}.git"
 }
 
 # Write commit metadata to a well-known file for platform visibility
