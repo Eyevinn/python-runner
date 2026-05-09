@@ -58,6 +58,7 @@ docker run --rm \
 | `AWS_ACCESS_KEY_ID` | AWS/S3 access key ID |
 | `AWS_SECRET_ACCESS_KEY` | AWS/S3 secret access key |
 | `OSC_ACCESS_TOKEN` | Access token for Eyevinn Open Source Cloud config service |
+| `CONFIG_API_KEY` | Optional API key for encrypted parameter store. When set alongside `OSC_ACCESS_TOKEN` and `CONFIG_SVC`, secret parameters are decrypted before being injected as environment variables. |
 | `CONFIG_SVC` | URL to config service endpoint |
 | `PORT` | Port to run the application on (default: `8080`) |
 
