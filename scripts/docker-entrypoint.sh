@@ -23,6 +23,14 @@ clone_from_git() {
   # When SOURCE_URL has no credentials, this is identical to git_host.
   local git_host_public=$(echo "$git_host" | sed -E 's|^[^@]+@||')
 
+  # Extract #<ref> fragment if present, and strip it from the URL used for
+  # further parsing. Must run before /tree/ handling so repo_path extraction
+  # operates on the fragment-stripped URL.
+  if [[ "$url" == *"#"* ]]; then
+    branch="${url##*#}"
+    url="${url%#*}"
+  fi
+
   # Check if URL contains a branch reference (e.g., /tree/branch_name)
   if [[ "$url" == *"/tree/"* ]]; then
     # Extract branch name (everything after /tree/)
@@ -144,6 +152,18 @@ fi
 
 # Change to the usercontent directory
 cd /usercontent
+
+# SUB_PATH support — for monorepo deployments where the Python app lives
+# in a subdirectory of the cloned repo.
+if [ -n "${SUB_PATH:-}" ]; then
+  WORK_DIR="/usercontent/$SUB_PATH"
+  if [ ! -d "$WORK_DIR" ]; then
+    echo "Error: SUB_PATH directory '$WORK_DIR' does not exist"
+    exit 1
+  fi
+  echo "Using SUB_PATH: $SUB_PATH (working directory: $WORK_DIR)"
+  cd "$WORK_DIR"
+fi
 
 # Load environment variables from config service if configured
 if [ -n "${OSC_ACCESS_TOKEN:-}" ] && [ -n "${CONFIG_SVC:-}" ]; then
