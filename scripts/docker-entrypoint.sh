@@ -108,8 +108,11 @@ write_commit_info() {
     > "$repo_dir/.commit-info.json" 2>/dev/null || true
   # Exclude .commit-info.json from git status so build steps asserting a clean
   # tree are not broken by a file the platform wrote.
-  excl="$(git -C "$repo_dir" rev-parse --git-path info/exclude 2>/dev/null)"
-  grep -qxF '.commit-info.json' "$excl" 2>/dev/null || echo '.commit-info.json' >> "$excl"
+  if git -C "$repo_dir" rev-parse --git-dir >/dev/null 2>&1; then
+    excl="$(git -C "$repo_dir" rev-parse --git-path info/exclude 2>/dev/null)"
+    mkdir -p "$(dirname "$excl")"
+    grep -qxF '.commit-info.json' "$excl" 2>/dev/null || echo '.commit-info.json' >> "$excl"
+  fi
   echo "Commit info: $shortSha - $msg"
 }
 
