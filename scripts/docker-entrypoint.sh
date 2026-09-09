@@ -106,6 +106,10 @@ write_commit_info() {
   printf '{"sha":"%s","shortSha":"%s","message":"%s","author":"%s","date":"%s","recentCommits":%s}\n' \
     "$sha" "$shortSha" "$msg" "$author" "$date" "$recent" \
     > "$repo_dir/.commit-info.json" 2>/dev/null || true
+  # Exclude .commit-info.json from git status so build steps asserting a clean
+  # tree are not broken by a file the platform wrote.
+  excl="$(git -C "$repo_dir" rev-parse --git-path info/exclude 2>/dev/null)"
+  grep -qxF '.commit-info.json' "$excl" 2>/dev/null || echo '.commit-info.json' >> "$excl"
   echo "Commit info: $shortSha - $msg"
 }
 
