@@ -61,20 +61,48 @@ clone_from_git() {
   # Support GIT_TOKEN with GITHUB_TOKEN as fallback for backward compatibility
   local git_token="${GIT_TOKEN:-$GITHUB_TOKEN}"
 
+  # Credentials travel via a host-scoped HTTP Authorization header
+  # (git -c http.https://<host>/.extraheader=...) instead of being embedded
+  # in the clone URL — the same technique actions/checkout uses, ported from
+  # Eyevinn/web-runner#56. A -c value passed to a single git invocation is
+  # never persisted to .git/config and is not part of the URL string, so it
+  # cannot appear in "fatal: ... for '<url>'"-style output that git itself
+  # echoes to stderr on a failed clone, independent of anything this script
+  # logs — embedding the token in the URL argument was the vulnerability.
+  #
+  # The header key is scoped to the exact host being cloned from
+  # (http.https://<host>/.extraheader) rather than a bare http.extraheader,
+  # so it is not attached to requests to a different host (e.g. a redirect).
+  local -a GIT_AUTH_ARGS=()
   if [ -n "$git_token" ]; then
-    echo "cloning https://***@${git_host_public}/${repo_path}.git"
-    git clone $clone_opts "https://token:${git_token}@${git_host_public}/${repo_path}.git" /usercontent
+    local auth_b64
+    auth_b64=$(printf 'token:%s' "$git_token" | base64 | tr -d '\n')
+    GIT_AUTH_ARGS=(-c "http.https://${git_host_public}/.extraheader=AUTHORIZATION: basic ${auth_b64}")
   elif [ "$git_host" != "$git_host_public" ]; then
-    # SOURCE_URL embeds credentials (e.g. Gitea: https://user:pass@host/...).
-    # Clone with them in place but keep them out of the log line.
-    echo "cloning https://***@${git_host_public}/${repo_path}.git"
-    git clone $clone_opts "https://${git_host}/${repo_path}.git" /usercontent
-  else
-    echo "cloning https://${git_host_public}/${repo_path}.git"
-    git clone $clone_opts "https://${git_host_public}/${repo_path}.git" /usercontent
+    # Gitea: SOURCE_URL pre-embeds user:pass@host — reuse it as the
+    # Basic-Auth pair instead of putting it back into the URL. Split on the
+    # FIRST "@" (matching the git_host_public derivation above) so this
+    # stays consistent with the existing convention in this script.
+    local creds="${git_host%%@*}"
+    local auth_b64
+    auth_b64=$(printf '%s' "$creds" | base64 | tr -d '\n')
+    GIT_AUTH_ARGS=(-c "http.https://${git_host_public}/.extraheader=AUTHORIZATION: basic ${auth_b64}")
   fi
 
-  # Scrub PAT from origin remote — token must not persist to .git/config
+  # Defense in depth: redact any credential-shaped token from git's own
+  # stderr, in case some other/future git diagnostic leaks something we
+  # haven't anticipated. Process substitution (2> >(...)), not a pipe, so
+  # $?/set -e for the wrapped command is unaffected.
+  git_scrub_stderr() {
+    "$@" 2> >(sed -r 's/gh[pso]_[A-Za-z0-9]{20,}/[REDACTED]/g; s/([Bb]asic )[A-Za-z0-9+\/=]{8,}/\1[REDACTED]/g' >&2)
+  }
+
+  echo "cloning https://${git_host_public}/${repo_path}.git"
+  git_scrub_stderr git "${GIT_AUTH_ARGS[@]}" clone $clone_opts "https://${git_host_public}/${repo_path}.git" /usercontent
+
+  # origin is already credential-free since the clone URL was — this
+  # explicit scrub is kept as defense in depth (PR #8) and to normalize any
+  # PVC-cached .git/config from before this fix.
   git -C /usercontent remote set-url origin "https://${git_host_public}/${repo_path}.git"
 }
 
