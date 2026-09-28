@@ -213,8 +213,16 @@ if [ -n "${OSC_ACCESS_TOKEN:-}" ] && [ -n "${CONFIG_SVC:-}" ]; then
     -H "x-pat-jwt: $OSC_ACCESS_TOKEN" 2>&1) && \
     OSC_ACCESS_TOKEN=$(echo "$REFRESH_RESULT" | jq -r '.token // empty') || true
   echo "[CONFIG] Loading environment variables from config service '$CONFIG_SVC'"
-  config_env_output=$(npx -y @osaas/cli@latest web config-to-env ${OSC_ENV:+--env "$OSC_ENV"} "$CONFIG_SVC" 2>&1)
-  config_exit=$?
+  # Guard against a hung/unresolvable CONFIG_SVC blocking boot forever.
+  # The "&& config_exit=0 || config_exit=$?" form (rather than a plain
+  # `cmd; config_exit=$?`) is required, not stylistic: under `set -e`, a
+  # failing command substitution used as an assignment's RHS is a "simple
+  # command" and is NOT exempt from -e, so a bare non-zero exit here would
+  # kill the whole script immediately, before config_exit is ever read below
+  # — silently skipping the tolerant log-and-continue path this config_exit
+  # check implements, for a timeout exit (124) same as any other non-zero
+  # exit from this call.
+  config_env_output=$(timeout 60s npx -y @osaas/cli@latest web config-to-env ${OSC_ENV:+--env "$OSC_ENV"} "$CONFIG_SVC" 2>&1) && config_exit=0 || config_exit=$?
   if [ $config_exit -eq 0 ]; then
     valid_exports=$(echo "$config_env_output" | grep "^export [A-Za-z_][A-Za-z0-9_]*=")
     if [ -n "$valid_exports" ]; then
