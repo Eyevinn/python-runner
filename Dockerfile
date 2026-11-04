@@ -24,7 +24,16 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && node --version \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install gradio
+# Run as a non-root user. Python packages go into a virtualenv owned by that
+# user (/opt/venv, first on PATH), so the entrypoint's `pip install` calls and
+# any `pip install` in a tenant setup.sh keep working without root.
+RUN useradd --create-home --uid 1000 --shell /bin/bash runner \
+    && python -m venv /opt/venv \
+    && mkdir -p /usercontent \
+    && chown -R runner:runner /opt/venv /usercontent
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH=/opt/venv/bin:$PATH
+RUN pip install --no-cache-dir gradio && chown -R runner:runner /opt/venv
 
 # Version of @osaas/cli that docker-entrypoint.sh runs via npx. This is the
 # single place the version is pinned; bump it here.
@@ -32,6 +41,8 @@ ENV OSAAS_CLI_VERSION=4.35.0
 WORKDIR /runner
 COPY ./scripts ./
 RUN chmod +x ./*.sh
+USER runner
+ENV HOME=/home/runner
 VOLUME /usercontent
 ENV PORT=8080
 ENTRYPOINT [ "/runner/docker-entrypoint.sh" ]

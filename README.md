@@ -72,6 +72,8 @@ The runner automatically detects and installs dependencies from:
 
 If a `setup.sh` script is present in the repository root, it will be executed after dependency installation.
 
+The container runs as the non-root user `runner` (uid 1000). Python packages are installed into a virtualenv at `/opt/venv` owned by that user, and `/usercontent` is writable by it. `setup.sh` therefore cannot run `apt-get` or other root-only commands.
+
 ## Automatic Framework Detection
 
 The runner automatically detects your application type and starts it with the appropriate server:
